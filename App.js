@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Text, View, SafeAreaView, StyleSheet,Image } from "react-native";
+import { Text, View, SafeAreaView, StyleSheet, Image } from "react-native";
 import * as tf from "@tensorflow/tfjs";
 import { Asset } from "expo-asset";
+// import * as tf from '@tensorflow/tfjs-core';
+// import '@tensorflow/tfjs-backend-webgl';
 import {
   bundleResourceIO,
-  fetch,
   decodeJpeg,
 } from "@tensorflow/tfjs-react-native";
 import * as FileSystem from "expo-file-system";
@@ -33,27 +34,36 @@ const labels = {
   16: { name: "accident", id: 16 },
 };
 
+var imgUrl ="./assets/car180.jpg"
+
 const App = () => {
-  const [isTfReady, setTfReady] = useState(false);
-  const [model, setModel] = useState(null);
-  const [predictions, setPredictions] = useState(null);
   const [filteredPredictions, setFilteredPredictions] = useState(null);
+  const [model, setModel] = useState(null);
+  const [imageTensor, setImageTensor] = useState(null);
+
 
   useEffect(() => {
-    const loadModelAndPredict = async () => {
+    const loadModel = async () => {
       try {
         await tf.ready();
-        const model = await tf.loadGraphModel(
+        
+        const Model = await tf.loadGraphModel(
           bundleResourceIO(MODEL_JSON, [
             MODEL_WEIGHTS_1,
             MODEL_WEIGHTS_2,
             MODEL_WEIGHTS_3,
           ])
         );
+        setModel(Model);
         console.log("Model loaded");
-
+      } catch (error) {
+        console.error("Error loading model: ", error);
+      }
+    };
+    const loadImageTensor = async () => {
+      try {
         const imageAsset = Asset.fromModule(
-          require("./assets/Japan_013115.jpg")
+          require(imgUrl)
         );
         await imageAsset.downloadAsync(); // Ensure the asset is downloaded
         const imageUri = imageAsset.localUri;
@@ -69,23 +79,30 @@ const App = () => {
         );
 
         // Decode image data to a tensor
-        const imageTensor = decodeJpeg(imageData);
+        const ImageTensor = decodeJpeg(imageData);
+        setImageTensor(ImageTensor);
         console.log("Image tensor ready");
+      } catch (error) {
+        console.error("Error loading image tensor: ", error);
+      }
+    };
+    loadModel();
+    loadImageTensor();
+  }, []);
 
+  // Run prediction when filteredPredictions change
+  useEffect(() => {
+    const predict = async () => {
+      if (!model || !imageTensor) return; // Ensure model and image tensor are loaded
+
+      try {
         // Make prediction using executeAsync
         const predictions = await model.executeAsync(imageTensor.expandDims(0));
-        // setPredictions(predictions);
-        console.log("Prediction done");
-        // Assuming predictions is an array of tensors with the following order:
-        // [numDetections, boxes, classes, scores]
-        // const [numDetections, boxes, classes, scores] = predictions;
-
         const classes = await predictions[3].array();
         const scores = await predictions[2].array();
         const boxes = await predictions[1].array();
-        //5
-        // console.log(boxes)
-        threshold = 0.4;
+
+        const threshold = 0.4;
         const combinedArray = classes[0]
           .map((_, index) => ({
             box: boxes[0][index],
@@ -94,14 +111,16 @@ const App = () => {
           }))
           .filter((item) => item.score > threshold);
         setFilteredPredictions(combinedArray);
-        console.log(typeof filteredPredictions);
-        console.log(filteredPredictions);
+        console.log(combinedArray);
       } catch (error) {
-        console.error("Error during model prediction: ", error);
+        console.error("Error during prediction: ", error);
       }
     };
-    loadModelAndPredict();
-  }, [isTfReady, model]);
+
+    predict();
+  }, [ model, imageTensor]);
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -109,10 +128,10 @@ const App = () => {
         <Header />
         <Image
           style={styles.img}
-          source={require('./assets/Japan_013115.jpg')} // Change the path to your logo image
+          source={require(imgUrl)} // Change the path to your logo image
           resizeMode="contain"
         />
-        <Text>{JSON.stringify(filteredPredictions)}</Text>
+        <Text>{filteredPredictions?JSON.stringify(filteredPredictions):'loading'}</Text>
       </View>
     </SafeAreaView>
   );
@@ -123,19 +142,17 @@ const styles = StyleSheet.create({
     flex: 1, // Ensure that SafeAreaView takes up the entire screen
   },
   innerContainer: {
-    flex: 1,
-    display:'flex',
-
-     // Ensure that the inner container takes up the entire SafeAreaView
+    display:'flex', // Ensure that the inner container takes up the entire SafeAreaView
   },
-  img:{
-    // padding :10,
-    flex: 1,
-    width: '100%',
-    // alignItems: 'center',
-
+  img: {
+    padding: 0,
+    // flex: 1,
+    width: "100%",
+    alignItems: "center",
+    backgroundColor: "#0553",
+    display: "flex",
+    
   },
-
 });
 
 export default App;
