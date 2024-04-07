@@ -105,18 +105,14 @@ const App = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View >
+      <View style={styles.innerContainer}>
         <Header />
-        <View style={styles.imgView}>
         <Image
           style={styles.img}
           source={require('./assets/Japan_013115.jpg')} // Change the path to your logo image
           resizeMode="contain"
         />
-        </View>
-        {/* <View>
         <Text>{JSON.stringify(filteredPredictions)}</Text>
-        </View> */}
       </View>
     </SafeAreaView>
   );
@@ -136,14 +132,6 @@ const styles = StyleSheet.create({
     // padding :10,
     flex: 1,
     width: '100%',
-    // alignItems: 'center',
-
-  },
-  imgView:{
-    // padding :10,
-    flex: 1,
-    width: '100%',
-    height:'100%',
     // alignItems: 'center',
 
   },
