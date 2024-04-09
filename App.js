@@ -1,19 +1,30 @@
-import React, { useState, useEffect } from "react";
-import { Text, View, SafeAreaView, StyleSheet, Image } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Text,
+  View,
+  SafeAreaView,
+  StyleSheet,
+  Image,
+  Dimensions,
+  Platform,
+  LogBox,
+} from "react-native";
 import * as tf from "@tensorflow/tfjs";
 import { Asset } from "expo-asset";
-// import * as tf from '@tensorflow/tfjs-core';
-// import '@tensorflow/tfjs-backend-webgl';
-import {
-  bundleResourceIO,
-  decodeJpeg,
-} from "@tensorflow/tfjs-react-native";
+import { Camera } from "expo-camera";
+import Canvas from "react-native-canvas";
+import { cameraWithTensors } from "@tensorflow/tfjs-react-native";
+import { bundleResourceIO, decodeJpeg } from "@tensorflow/tfjs-react-native";
 import * as FileSystem from "expo-file-system";
 import Header from "./components/Header";
 const MODEL_JSON = require("./assets/model.json");
 const MODEL_WEIGHTS_1 = require("./assets/group1-shard1of3.bin");
 const MODEL_WEIGHTS_2 = require("./assets/group1-shard2of3.bin");
 const MODEL_WEIGHTS_3 = require("./assets/group1-shard3of3.bin");
+
+const TensorCamera = cameraWithTensors(Camera);
+const { width, height } = Dimensions.get("window");
+LogBox.ignoreAllLogs(true);
 
 const labels = {
   1: { name: "D00", id: 1 },
@@ -34,19 +45,73 @@ const labels = {
   16: { name: "accident", id: 16 },
 };
 
-var imgUrl ="./assets/car180.jpg"
+var imgUrl = "./assets/car180.jpg";
 
 const App = () => {
   const [filteredPredictions, setFilteredPredictions] = useState(null);
   const [model, setModel] = useState(null);
   const [imageTensor, setImageTensor] = useState(null);
+  // const cameraRef = useRef(null);
+  // const context = useRef(null);
+  // const canvas = useRef(null);
 
+  // const TensorCamera = cameraWithTensors(Camera);
+
+  let textureDims;
+  Platform.OS === "ios"
+    ? (textureDims = { height: 1920, width: 1080 })
+    : (textureDims = { height: 1200, width: 1600 });
+
+  const predict = async (img) => {
+    // if (!model || !imageTensor) return; // Ensure model and image tensor are loaded
+
+    try {
+      // Make prediction using executeAsync
+      const predictions = await model.executeAsync(img.expandDims(0));
+      const classes = await predictions[3].array();
+      const scores = await predictions[2].array();
+      const boxes = await predictions[1].array();
+
+      const threshold = 0.4;
+      const combinedArray = classes[0]
+        .map((_, index) => ({
+          box: boxes[0][index],
+          score: scores[0][index],
+          class: labels[classes[0][index]].name,
+        }))
+        .filter((item) => item.score > threshold);
+      setFilteredPredictions(combinedArray);
+      console.log(combinedArray);
+    } catch (error) {
+      console.error("Error during prediction: ", error);
+    }
+  };
+
+  const handleCameraStream =  (images) => {
+    const loop = async () => {
+      console.log(1)
+        const nextImageTensor = images.next().value;
+        console.log(2)
+        if (nextImageTensor) {
+          console.log(3)
+          const objects = await predict(nextImageTensor);
+          console.log(4)
+          // console.log(objects.map((object) => object.className));
+          console.log(objects);
+          tf.dispose([nextImageTensor]);
+        }
+      
+      requestAnimationFrame(loop);
+    };
+    loop();
+  };
 
   useEffect(() => {
     const loadModel = async () => {
       try {
+        const { status } = await Camera.requestCameraPermissionsAsync();
         await tf.ready();
-        
+        tf.getBackend();
         const Model = await tf.loadGraphModel(
           bundleResourceIO(MODEL_JSON, [
             MODEL_WEIGHTS_1,
@@ -62,9 +127,7 @@ const App = () => {
     };
     const loadImageTensor = async () => {
       try {
-        const imageAsset = Asset.fromModule(
-          require(imgUrl)
-        );
+        const imageAsset = Asset.fromModule(require(imgUrl));
         await imageAsset.downloadAsync(); // Ensure the asset is downloaded
         const imageUri = imageAsset.localUri;
 
@@ -87,72 +150,31 @@ const App = () => {
       }
     };
     loadModel();
-    loadImageTensor();
   }, []);
 
-  // Run prediction when filteredPredictions change
-  useEffect(() => {
-    const predict = async () => {
-      if (!model || !imageTensor) return; // Ensure model and image tensor are loaded
-
-      try {
-        // Make prediction using executeAsync
-        const predictions = await model.executeAsync(imageTensor.expandDims(0));
-        const classes = await predictions[3].array();
-        const scores = await predictions[2].array();
-        const boxes = await predictions[1].array();
-
-        const threshold = 0.4;
-        const combinedArray = classes[0]
-          .map((_, index) => ({
-            box: boxes[0][index],
-            score: scores[0][index],
-            class: labels[classes[0][index]].name,
-          }))
-          .filter((item) => item.score > threshold);
-        setFilteredPredictions(combinedArray);
-        console.log(combinedArray);
-      } catch (error) {
-        console.error("Error during prediction: ", error);
-      }
-    };
-
-    predict();
-  }, [ model, imageTensor]);
-
-
-
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.innerContainer}>
-        <Header />
-        <Image
-          style={styles.img}
-          source={require(imgUrl)} // Change the path to your logo image
-          resizeMode="contain"
-        />
-        <Text>{filteredPredictions?JSON.stringify(filteredPredictions):'loading'}</Text>
-      </View>
-    </SafeAreaView>
+    <TensorCamera
+      style={styles.camera}
+      type={Camera.Constants.Type.back}
+      onReady={handleCameraStream}
+      resizeHeight={200}
+      resizeWidth={152}
+      resizeDepth={3}
+      autorender={true}
+      cameraTextureHeight={textureDims.height}
+      cameraTextureWidth={textureDims.width}
+    />
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, // Ensure that SafeAreaView takes up the entire screen
+    flex: 1,
+    backgroundColor: "#fff",
   },
-  innerContainer: {
-    display:'flex', // Ensure that the inner container takes up the entire SafeAreaView
-  },
-  img: {
-    padding: 0,
-    // flex: 1,
+  camera: {
     width: "100%",
-    alignItems: "center",
-    backgroundColor: "#0553",
-    display: "flex",
-    
+    height: "100%",
   },
 });
-
 export default App;

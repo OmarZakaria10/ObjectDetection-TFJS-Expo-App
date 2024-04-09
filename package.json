@@ -13,6 +13,7 @@
     "@tensorflow/tfjs": "^4.17.0",
     "@tensorflow/tfjs-react-native": "^1.0.0",
     "expo": "~50.0.14",
+    "expo-camera": "^14.1.1",
     "expo-file-system": "^16.0.8",
     "expo-gl": "^13.6.0",
     "expo-gl-cpp": "^11.4.0",
@@ -20,7 +21,10 @@
     "jpeg-js": "^0.4.4",
     "react": "18.2.0",
     "react-native": "0.73.6",
-    "react-native-fs": "^2.20.0"
+    "react-native-canvas": "^0.1.38",
+    "react-native-fs": "^2.20.0",
+    "react-native-web": "~0.18.9",
+    "react-native-webview": "11.23.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"
